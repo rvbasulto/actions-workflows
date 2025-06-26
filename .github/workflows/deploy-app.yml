@@ -1,59 +1,35 @@
-name: Reusable App Deployment Workflow
+name: Deploy App to VPS
 
 on:
-  workflow_call:
-    inputs:
-      dockerhub_username:
-        required: true
-        type: string
-      host:
-        required: true
-        type: string
-      ssh_user:
-        required: true
-        type: string
-      image_name:
-        required: true
-        type: string
-    secrets:
-      DOCKERHUB_TOKEN:
-        required: true
-      SSH_KEY:
-        required: true
+  repository_dispatch:
+    types: [deploy-app]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout app repository
+      - name: Checkout the application repo
         uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
         with:
-          username: ${{ inputs.dockerhub_username }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: rvbasulto/nextjs-portfolio-app
+          ref: ${{ github.event.client_payload.ref }}
+          token: ${{ secrets.GH_PAT }}  # PAT del mismo user
 
-      - name: Build Docker image
+      - name: Docker login & build
         run: |
-          docker build -t ${{ inputs.dockerhub_username }}/${{ inputs.image_name }} .
+          docker build -t rvasulto/nextjs-portfolio-app .
+          echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u rvasulto --password-stdin
+          docker push rvasulto/nextjs-portfolio-app
 
-      - name: Push Docker image
-        run: |
-          docker push ${{ inputs.dockerhub_username }}/${{ inputs.image_name }}
-
-      - name: Deploy to server via SSH
+      - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ inputs.host }}
-          username: ${{ inputs.ssh_user }}
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            docker pull ${{ inputs.dockerhub_username }}/${{ inputs.image_name }}
+            docker pull rvasulto/nextjs-portfolio-app
             docker stop nextjs-app || true
             docker rm nextjs-app || true
-            docker run -d --name nextjs-app -p 3000:3000 ${{ inputs.dockerhub_username }}/${{ inputs.image_name }}
+            docker run -d --name nextjs-app -p 3000:3000 rvasulto/nextjs-portfolio-app
