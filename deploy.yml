@@ -1,4 +1,4 @@
-name: Trigger Central Deploy
+name: Notify deploy to central repo
 
 on:
   push:
@@ -6,13 +6,13 @@ on:
       - master
 
 jobs:
-  notify:
+  trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger deploy in actions-workflows repo
+      - name: Trigger central deploy
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.PAT_ACTIONS_WORKFLOWS }}" \
             https://api.github.com/repos/rvbasulto/actions-workflows/dispatches \
-            -d '{"event_type":"deploy-app","client_payload":{"app":"nextjs-portfolio-app","ref":"master"}}'
+            -d '{"event_type":"deploy-app","client_payload":{"app_repo":"grdelgado96/Devops_Portfolio","ref":"master","image_name":"nextjs-portfolio-app"}}'
