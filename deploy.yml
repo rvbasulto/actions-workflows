@@ -1,0 +1,18 @@
+name: Deploy Next.js App 
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    uses: rvbasulto/actions-workflows/.github/workflows/deploy-app.yml@main
+    with:
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      host: ${{ secrets.HOST }}
+      ssh_user: ${{ secrets.SSH_USER }}
+      image_name: nextjs-portfolio-app   # puedes personalizarlo si quieres
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
