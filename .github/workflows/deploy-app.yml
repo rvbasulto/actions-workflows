@@ -47,7 +47,7 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.TAG }}
             ${{ steps.meta.outputs.LATEST }}
-          cache-from: type=registry,ref=${{ steps.meta.outputs.IMAGE }}:buildcache
+          cache-from: type=registry,ref=${{ steps.meta.outputs.IMAGE }}:buildcache,ignore-error=true
           cache-to: type=registry,ref=${{ steps.meta.outputs.IMAGE }}:buildcache,mode=max
           build-args: |
             NEXT_PUBLIC_SANITY_DATASET=${{ secrets.NEXT_PUBLIC_SANITY_DATASET }}
