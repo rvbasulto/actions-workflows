@@ -8,24 +8,51 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout app repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ github.event.client_payload.app_repo }}
           ref: ${{ github.event.client_payload.ref }}
           token: ${{ secrets.GH_PAT }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker login
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Compose image tag
+        id: meta
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.client_payload.image_name }} .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.client_payload.image_name }}
+          SHA_SHORT="${GITHUB_SHA::7}"
+          IMG_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.client_payload.image_name }}"
+          echo "IMAGE=${IMG_NAME}" >> $GITHUB_OUTPUT
+          echo "TAG=${IMG_NAME}:${SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "LATEST=${IMG_NAME}:latest" >> $GITHUB_OUTPUT
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.TAG }}
+            ${{ steps.meta.outputs.LATEST }}
+          cache-from: type=registry,ref=${{ steps.meta.outputs.IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.IMAGE }}:buildcache,mode=max
+          build-args: |
+            NEXT_PUBLIC_SANITY_DATASET=${{ secrets.NEXT_PUBLIC_SANITY_DATASET }}
+            NEXT_PUBLIC_SANITY_PROJECT_ID=${{ secrets.NEXT_PUBLIC_SANITY_PROJECT_ID }}
+            NEXT_PUBLIC_SANITY_API_VERSION=${{ secrets.NEXT_PUBLIC_SANITY_API_VERSION }}
 
       - name: SSH deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -34,7 +61,13 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.client_payload.image_name }}
+            set -e
+            IMAGE="${{ steps.meta.outputs.LATEST }}"
+            docker pull "$IMAGE"
             docker stop nextjs-app || true
             docker rm nextjs-app || true
-            docker run -d --name nextjs-app -p 3000:3000 ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.client_payload.image_name }}
+            # Inject server-only secrets here (NOT NEXT_PUBLIC)
+            docker run -d --name nextjs-app -p 3000:3000 \
+              -e NODE_ENV=production \
+              -e SANITY_READ_TOKEN="${{ secrets.SANITY_READ_TOKEN }}" \
+              "$IMAGE"
